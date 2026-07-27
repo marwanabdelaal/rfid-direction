@@ -1,0 +1,27 @@
+# RFID Direction Detection System - Version 1.0 configuration
+#
+# Map each reader's identifier (DeviceMac or DeviceSN) to the physical side
+# it sits on. The rest of the application only ever works with the resolved
+# ReaderSide (OUTSIDE / INSIDE), never the raw device id.
+readers:
+  "84D81B123456": Outside
+  "84D81B654321": Inside
+
+# Which payload field identifies the reader: "DeviceMac" or "DeviceSN"
+reader_id_field: "DeviceMac"
+
+# Timing (seconds). All timing values are configurable per the spec.
+#   cooldown_seconds         after a decision, ignore further reads for this window
+#   session_timeout_seconds  a tag seen by only one reader is dropped after this
+#   cleanup_interval_seconds how often the background sweeper purges dead sessions
+cooldown_seconds: 5
+session_timeout_seconds: 5
+cleanup_interval_seconds: 2
+
+# HTTP server
+host: "0.0.0.0"
+port: 8000
+
+# Logging
+log_dir: "logs"
+log_level: "INFO"

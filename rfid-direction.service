@@ -1,0 +1,17 @@
+[Unit]
+Description=RFID Direction Detection System V1.0
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/rfid_direction_v1.0
+ExecStart=/home/pi/rfid_direction_v1.0/.venv/bin/python app.py
+Restart=on-failure
+RestartSec=3
+# Keep everything in RAM; no state to persist between restarts.
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
