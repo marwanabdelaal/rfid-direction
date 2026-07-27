@@ -1,79 +1,36 @@
-"""Application entry point / composition root.
+"""Simplest possible HTTP listener for the UHF readers.
 
-Wires all modules together and starts the FastAPI server. Each module has a
-single responsibility; this file is where they are assembled:
-
-    config -> registry -> parser
-                       -> session_manager -> event_logger (subscriber)
-                       -> queue_worker (drains queue + cleanup thread)
-                       -> http_listener (FastAPI routes)
+Purpose: just receive POSTs from the readers and print the RAW body, so you can
+see exactly what a Hopeland reader sends before building any parsing logic.
 
 Run:
-    python app.py
-or:
-    uvicorn app:app --host 0.0.0.0 --port 8000
+    pip install fastapi uvicorn
+    python raw_listener.py
+
+Point the readers at:
+    POST http://<this-pi-ip>:8000/rfid
 """
-from __future__ import annotations
+from datetime import datetime
 
-import logging
-from contextlib import asynccontextmanager
+import uvicorn
+from fastapi import FastAPI, Request
 
-from fastapi import FastAPI
-
-from config import load_config
-from direction_engine import DirectionEngine
-from http_listener import build_router
-from logger import EventLogger, setup_logging
-from parser import PayloadParser
-from queue_worker import QueueWorker
-from reader_registry import ReaderRegistry
-from session_manager import SessionManager
-
-log = logging.getLogger(__name__)
+app = FastAPI(title="Raw RFID Listener")
 
 
-def create_app(config_path: str = "config.yaml") -> FastAPI:
-    cfg = load_config(config_path)
-    setup_logging(cfg.log_dir, cfg.log_level)
-
-    registry = ReaderRegistry(cfg.readers)
-    parser = PayloadParser(registry, cfg.reader_id_field)
-
-    session_manager = SessionManager(
-        cooldown_seconds=cfg.cooldown_seconds,
-        session_timeout_seconds=cfg.session_timeout_seconds,
-        engine=DirectionEngine(),
-    )
-    session_manager.subscribe(EventLogger().emit)
-
-    worker = QueueWorker(session_manager, cfg.cleanup_interval_seconds)
-
-    @asynccontextmanager
-    async def lifespan(app: FastAPI):
-        worker.start()
-        log.info(
-            "RFID Direction System V1.0 ready. Readers: %s",
-            ", ".join(registry.known_ids()),
-        )
-        try:
-            yield
-        finally:
-            worker.stop()
-
-    app = FastAPI(title="RFID Direction Detection System", version="1.0",
-                  lifespan=lifespan)
-    app.include_router(build_router(parser, worker))
-
-    # stash config so `python app.py` can read host/port
-    app.state.config = cfg
-    return app
-
-
-app = create_app()
+@app.post("/rfid")
+async def rfid(request: Request):
+    raw = await request.body()
+    print("=" * 60)
+    print(f"POST /rfid  @ {datetime.now().isoformat(timespec='milliseconds')}")
+    print(f"From: {request.client.host if request.client else 'unknown'}")
+    print(f"Content-Type: {request.headers.get('content-type')}")
+    print(f"Bytes: {len(raw)}")
+    print("-" * 60)
+    print(raw.decode(errors="replace"))
+    print("=" * 60, flush=True)
+    return {"status": "ok", "bytes": len(raw)}
 
 
 if __name__ == "__main__":
-    import uvicorn
-
-    cfg = app.state.config
-    uvicorn.run(app, host=cfg.host, port=cfg.port)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
